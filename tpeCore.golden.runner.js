@@ -264,6 +264,52 @@ function runSingleObjectiveEnqueuedTrials(seed, nTrials) {
   return records
 }
 
+function runSingleObjectiveFailures(seed, nTrials) {
+  const sampler = createTPESampler({
+    seed,
+    nStartupTrials: 30,
+    nEiCandidates: 24
+  })
+  const study = new Study({ sampler, directions: ['minimize'] })
+  const records = []
+
+  for (let i = 0; i < nTrials; i += 1) {
+    const trial = study.ask()
+    const params = suggestCore(trial)
+    const value = objectiveSingle(params)
+
+    if (trial.number % 6 === 1) {
+      study.tell(trial, { state: TrialState.FAIL })
+      records.push(
+        makeRecord({
+          number: trial.number,
+          params,
+          state: 'fail',
+          value: null,
+          values: null,
+          intermediateValues: [],
+          constraint: null
+        })
+      )
+    } else {
+      study.tell(trial, { value })
+      records.push(
+        makeRecord({
+          number: trial.number,
+          params,
+          state: 'complete',
+          value,
+          values: null,
+          intermediateValues: [],
+          constraint: null
+        })
+      )
+    }
+  }
+
+  return records
+}
+
 function runSingleObjectiveMaximizeNumeric(seed, nTrials) {
   return runSingleObjectiveNumericWithSampler(seed, nTrials, ['maximize'])
 }
@@ -626,6 +672,9 @@ export async function runGoldenScenario({ name, seed, nTrials, tellLag }) {
   }
   if (name === 'single_objective_enqueued_trials') {
     return runSingleObjectiveEnqueuedTrials(seed, nTrials)
+  }
+  if (name === 'single_objective_failures') {
+    return runSingleObjectiveFailures(seed, nTrials)
   }
   if (name === 'single_objective_maximize_numeric') {
     return runSingleObjectiveMaximizeNumeric(seed, nTrials)

@@ -263,6 +263,50 @@ def run_single_objective_enqueued_trials(seed: int, n_trials: int) -> List[Trial
     return records
 
 
+def run_single_objective_failures(seed: int, n_trials: int) -> List[TrialRecord]:
+    sampler = TPESampler(
+        seed=seed,
+        n_startup_trials=30,
+        n_ei_candidates=24,
+    )
+    study = optuna.create_study(sampler=sampler, direction="minimize")
+    records: List[TrialRecord] = []
+
+    for _ in range(n_trials):
+        trial = study.ask()
+        params = suggest_core(trial)
+        value = objective_single(params)
+
+        if trial.number % 6 == 1:
+            study.tell(trial, state=TrialState.FAIL)
+            records.append(
+                TrialRecord(
+                    number=trial.number,
+                    params=sanitize_params(params),
+                    state="fail",
+                    value=None,
+                    values=None,
+                    intermediate_values=[],
+                    constraint=None,
+                )
+            )
+        else:
+            study.tell(trial, value)
+            records.append(
+                TrialRecord(
+                    number=trial.number,
+                    params=sanitize_params(params),
+                    state="complete",
+                    value=float(value),
+                    values=None,
+                    intermediate_values=[],
+                    constraint=None,
+                )
+            )
+
+    return records
+
+
 def run_single_objective_maximize_numeric(seed: int, n_trials: int) -> List[TrialRecord]:
     return run_single_objective_numeric_with_sampler(
         seed=seed,
@@ -634,6 +678,7 @@ def main() -> None:
     n_trials = 200
     extended_n_trials = 120
     enqueued_n_trials = 8
+    fail_n_trials = 24
 
     scenarios.append(
         {
@@ -661,6 +706,24 @@ def main() -> None:
                     "trials": [
                         record.__dict__
                         for record in run_single_objective_enqueued_trials(seed, enqueued_n_trials)
+                    ],
+                }
+                for seed in seeds
+            ],
+        }
+    )
+
+    scenarios.append(
+        {
+            "name": "single_objective_failures",
+            "tellLag": 0,
+            "objectiveDirections": ["minimize"],
+            "runs": [
+                {
+                    "seed": seed,
+                    "trials": [
+                        record.__dict__
+                        for record in run_single_objective_failures(seed, fail_n_trials)
                     ],
                 }
                 for seed in seeds
