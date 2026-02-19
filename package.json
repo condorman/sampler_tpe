@@ -1,6 +1,6 @@
 {
   "name": "optuna-tpe-js",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Optuna-compatible TPE sampler and Study primitives for JavaScript.",
   "type": "module",
   "main": "./src/optuna_tpe.js",
