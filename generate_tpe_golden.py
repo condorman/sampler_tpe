@@ -127,6 +127,53 @@ def evaluate_with_pruning(trial: optuna.trial.Trial, params: Dict[str, Any]) -> 
     return "complete", base, intermediates
 
 
+def gamma_custom(n_trials: int) -> int:
+    return min(32, math.ceil(0.2 * n_trials))
+
+
+def weights_custom(n_observations: int) -> List[float]:
+    return [float((i + 1) ** 2) for i in range(n_observations)]
+
+
+def run_single_objective_numeric_with_sampler(
+    seed: int,
+    n_trials: int,
+    direction: str,
+    sampler_kwargs: Optional[Dict[str, Any]] = None,
+) -> List[TrialRecord]:
+    sampler_args: Dict[str, Any] = {
+        "seed": seed,
+        "n_startup_trials": 10,
+        "n_ei_candidates": 24,
+    }
+    if sampler_kwargs is not None:
+        sampler_args.update(sampler_kwargs)
+
+    sampler = TPESampler(**sampler_args)
+    study = optuna.create_study(sampler=sampler, direction=direction)
+    records: List[TrialRecord] = []
+
+    for _ in range(n_trials):
+        trial = study.ask()
+        params = suggest_numeric(trial)
+        value = objective_single_numeric(params)
+        study.tell(trial, value)
+
+        records.append(
+            TrialRecord(
+                number=trial.number,
+                params=sanitize_params(params),
+                state="complete",
+                value=float(value),
+                values=None,
+                intermediate_values=[],
+                constraint=None,
+            )
+        )
+
+    return records
+
+
 def run_single_objective(seed: int, n_trials: int) -> List[TrialRecord]:
     sampler = TPESampler(
         seed=seed,
@@ -158,33 +205,56 @@ def run_single_objective(seed: int, n_trials: int) -> List[TrialRecord]:
 
 
 def run_single_objective_maximize_numeric(seed: int, n_trials: int) -> List[TrialRecord]:
-    sampler = TPESampler(
+    return run_single_objective_numeric_with_sampler(
         seed=seed,
-        n_startup_trials=10,
-        n_ei_candidates=24,
+        n_trials=n_trials,
+        direction="maximize",
     )
-    study = optuna.create_study(sampler=sampler, direction="maximize")
-    records: List[TrialRecord] = []
 
-    for _ in range(n_trials):
-        trial = study.ask()
-        params = suggest_numeric(trial)
-        value = objective_single_numeric(params)
-        study.tell(trial, value)
 
-        records.append(
-            TrialRecord(
-                number=trial.number,
-                params=sanitize_params(params),
-                state="complete",
-                value=float(value),
-                values=None,
-                intermediate_values=[],
-                constraint=None,
-            )
-        )
+def run_single_objective_prior_weight(seed: int, n_trials: int) -> List[TrialRecord]:
+    return run_single_objective_numeric_with_sampler(
+        seed=seed,
+        n_trials=n_trials,
+        direction="minimize",
+        sampler_kwargs={"prior_weight": 0.2},
+    )
 
-    return records
+
+def run_single_objective_magic_clip_endpoints(seed: int, n_trials: int) -> List[TrialRecord]:
+    return run_single_objective_numeric_with_sampler(
+        seed=seed,
+        n_trials=n_trials,
+        direction="minimize",
+        sampler_kwargs={"consider_magic_clip": False, "consider_endpoints": True},
+    )
+
+
+def run_single_objective_gamma_custom(seed: int, n_trials: int) -> List[TrialRecord]:
+    return run_single_objective_numeric_with_sampler(
+        seed=seed,
+        n_trials=n_trials,
+        direction="minimize",
+        sampler_kwargs={"gamma": gamma_custom},
+    )
+
+
+def run_single_objective_weights_custom(seed: int, n_trials: int) -> List[TrialRecord]:
+    return run_single_objective_numeric_with_sampler(
+        seed=seed,
+        n_trials=n_trials,
+        direction="minimize",
+        sampler_kwargs={"weights": weights_custom},
+    )
+
+
+def run_single_objective_n_ei_candidates_custom(seed: int, n_trials: int) -> List[TrialRecord]:
+    return run_single_objective_numeric_with_sampler(
+        seed=seed,
+        n_trials=n_trials,
+        direction="minimize",
+        sampler_kwargs={"n_ei_candidates": 64},
+    )
 
 
 def run_single_objective_high_startup(seed: int, n_trials: int) -> List[TrialRecord]:
@@ -471,6 +541,100 @@ def main() -> None:
                     "trials": [
                         record.__dict__
                         for record in run_single_objective_maximize_numeric(seed, extended_n_trials)
+                    ],
+                }
+                for seed in seeds
+            ],
+        }
+    )
+
+    scenarios.append(
+        {
+            "name": "single_objective_prior_weight",
+            "tellLag": 0,
+            "objectiveDirections": ["minimize"],
+            "runs": [
+                {
+                    "seed": seed,
+                    "trials": [
+                        record.__dict__
+                        for record in run_single_objective_prior_weight(seed, extended_n_trials)
+                    ],
+                }
+                for seed in seeds
+            ],
+        }
+    )
+
+    scenarios.append(
+        {
+            "name": "single_objective_magic_clip_endpoints",
+            "tellLag": 0,
+            "objectiveDirections": ["minimize"],
+            "runs": [
+                {
+                    "seed": seed,
+                    "trials": [
+                        record.__dict__
+                        for record in run_single_objective_magic_clip_endpoints(
+                            seed, extended_n_trials
+                        )
+                    ],
+                }
+                for seed in seeds
+            ],
+        }
+    )
+
+    scenarios.append(
+        {
+            "name": "single_objective_gamma_custom",
+            "tellLag": 0,
+            "objectiveDirections": ["minimize"],
+            "runs": [
+                {
+                    "seed": seed,
+                    "trials": [
+                        record.__dict__
+                        for record in run_single_objective_gamma_custom(seed, extended_n_trials)
+                    ],
+                }
+                for seed in seeds
+            ],
+        }
+    )
+
+    scenarios.append(
+        {
+            "name": "single_objective_weights_custom",
+            "tellLag": 0,
+            "objectiveDirections": ["minimize"],
+            "runs": [
+                {
+                    "seed": seed,
+                    "trials": [
+                        record.__dict__
+                        for record in run_single_objective_weights_custom(seed, extended_n_trials)
+                    ],
+                }
+                for seed in seeds
+            ],
+        }
+    )
+
+    scenarios.append(
+        {
+            "name": "single_objective_n_ei_candidates_custom",
+            "tellLag": 0,
+            "objectiveDirections": ["minimize"],
+            "runs": [
+                {
+                    "seed": seed,
+                    "trials": [
+                        record.__dict__
+                        for record in run_single_objective_n_ei_candidates_custom(
+                            seed, extended_n_trials
+                        )
                     ],
                 }
                 for seed in seeds

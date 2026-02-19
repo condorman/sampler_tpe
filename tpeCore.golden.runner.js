@@ -85,6 +85,50 @@ function objectiveSingleGroup(params) {
   return values[0] + 0.5 * values[1]
 }
 
+function gammaCustom(nTrials) {
+  return Math.min(32, Math.ceil(0.2 * nTrials))
+}
+
+function weightsCustom(nObservations) {
+  const out = []
+  for (let i = 0; i < nObservations; i += 1) {
+    out.push((i + 1) * (i + 1))
+  }
+  return out
+}
+
+function runSingleObjectiveNumericWithSampler(seed, nTrials, directions, samplerOverrides = {}) {
+  const sampler = createTPESampler({
+    seed,
+    nStartupTrials: 10,
+    nEiCandidates: 24,
+    ...samplerOverrides
+  })
+  const study = new Study({ sampler, directions })
+  const records = []
+
+  for (let i = 0; i < nTrials; i += 1) {
+    const trial = study.ask()
+    const params = suggestNumeric(trial)
+    const value = objectiveSingleNumeric(params)
+    study.tell(trial, { value })
+
+    records.push(
+      makeRecord({
+        number: trial.number,
+        params,
+        state: 'complete',
+        value,
+        values: null,
+        intermediateValues: [],
+        constraint: null
+      })
+    )
+  }
+
+  return records
+}
+
 function evaluateWithPruning(trial, params) {
   const base = objectiveSingle(params)
   const intermediates = []
@@ -160,34 +204,38 @@ function runSingleObjective(seed, nTrials) {
 }
 
 function runSingleObjectiveMaximizeNumeric(seed, nTrials) {
-  const sampler = createTPESampler({
-    seed,
-    nStartupTrials: 10,
-    nEiCandidates: 24
+  return runSingleObjectiveNumericWithSampler(seed, nTrials, ['maximize'])
+}
+
+function runSingleObjectivePriorWeight(seed, nTrials) {
+  return runSingleObjectiveNumericWithSampler(seed, nTrials, ['minimize'], {
+    priorWeight: 0.2
   })
-  const study = new Study({ sampler, directions: ['maximize'] })
-  const records = []
+}
 
-  for (let i = 0; i < nTrials; i += 1) {
-    const trial = study.ask()
-    const params = suggestNumeric(trial)
-    const value = objectiveSingleNumeric(params)
-    study.tell(trial, { value })
+function runSingleObjectiveMagicClipEndpoints(seed, nTrials) {
+  return runSingleObjectiveNumericWithSampler(seed, nTrials, ['minimize'], {
+    considerMagicClip: false,
+    considerEndpoints: true
+  })
+}
 
-    records.push(
-      makeRecord({
-        number: trial.number,
-        params,
-        state: 'complete',
-        value,
-        values: null,
-        intermediateValues: [],
-        constraint: null
-      })
-    )
-  }
+function runSingleObjectiveGammaCustom(seed, nTrials) {
+  return runSingleObjectiveNumericWithSampler(seed, nTrials, ['minimize'], {
+    gamma: gammaCustom
+  })
+}
 
-  return records
+function runSingleObjectiveWeightsCustom(seed, nTrials) {
+  return runSingleObjectiveNumericWithSampler(seed, nTrials, ['minimize'], {
+    weights: weightsCustom
+  })
+}
+
+function runSingleObjectiveEiCandidatesCustom(seed, nTrials) {
+  return runSingleObjectiveNumericWithSampler(seed, nTrials, ['minimize'], {
+    nEiCandidates: 64
+  })
 }
 
 function runSingleObjectiveHighStartup(seed, nTrials) {
@@ -455,6 +503,21 @@ export async function runGoldenScenario({ name, seed, nTrials, tellLag }) {
   }
   if (name === 'single_objective_maximize_numeric') {
     return runSingleObjectiveMaximizeNumeric(seed, nTrials)
+  }
+  if (name === 'single_objective_prior_weight') {
+    return runSingleObjectivePriorWeight(seed, nTrials)
+  }
+  if (name === 'single_objective_magic_clip_endpoints') {
+    return runSingleObjectiveMagicClipEndpoints(seed, nTrials)
+  }
+  if (name === 'single_objective_gamma_custom') {
+    return runSingleObjectiveGammaCustom(seed, nTrials)
+  }
+  if (name === 'single_objective_weights_custom') {
+    return runSingleObjectiveWeightsCustom(seed, nTrials)
+  }
+  if (name === 'single_objective_n_ei_candidates_custom') {
+    return runSingleObjectiveEiCandidatesCustom(seed, nTrials)
   }
   if (name === 'single_objective_high_startup') {
     return runSingleObjectiveHighStartup(seed, nTrials)
