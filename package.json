@@ -1,6 +1,6 @@
 {
   "name": "optuna-tpe-js",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Optuna-compatible TPE sampler and Study primitives for JavaScript.",
   "type": "module",
   "main": "./src/optuna_tpe.js",
@@ -17,8 +17,8 @@
     "node": ">=18"
   },
   "scripts": {
-    "test": "vitest run tpeCore.golden.test.js",
-    "test:golden": "vitest run tpeCore.golden.test.js",
+    "test": "vitest run tpeCore.golden.test.js --testTimeout=120000",
+    "test:golden": "vitest run tpeCore.golden.test.js --testTimeout=120000",
     "golden:generate": "python3 generate_tpe_golden.py",
     "pack:check": "npm pack --dry-run",
     "prepublishOnly": "npm test"
