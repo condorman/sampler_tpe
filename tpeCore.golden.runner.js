@@ -3,7 +3,7 @@ import {
   TrialState,
   createTPESampler,
   sanitizeParams
-} from './src/tpe/optuna_tpe.js'
+} from './src/optuna_tpe.js'
 
 function objectiveSingle(params) {
   const catMap = { a: 0, b: 1, c: 2 }

@@ -208,3 +208,8 @@ __marimo__/
 
 # Envs
 env_*/
+
+# Node.js
+node_modules/
+npm-debug.log*
+*.tgz
