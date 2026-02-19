@@ -1,5 +1,6 @@
 const EPS = 1e-12
 const CONSTRAINTS_KEY = 'constraints'
+const FIXED_PARAMS_KEY = 'fixed_params'
 
 export const TrialState = {
   RUNNING: 'running',
@@ -57,6 +58,10 @@ function decodeNumberFromSnapshot(value) {
   if (token === '-Infinity') return -Infinity
   if (token === '-0') return -0
   throw new Error(`Unknown serialized number token: ${token}`)
+}
+
+function cloneJsonValue(value) {
+  return deserializeJsonValueFromSnapshot(serializeJsonValueForSnapshot(value))
 }
 
 function serializeJsonValueForSnapshot(value) {
@@ -469,6 +474,56 @@ function arraysEqual(a, b) {
     if (a[i] !== b[i]) return false
   }
   return true
+}
+
+function hasOwn(obj, key) {
+  return Object.prototype.hasOwnProperty.call(obj, key)
+}
+
+function distributionContainsValue(distribution, value) {
+  if (distribution instanceof CategoricalDistribution) {
+    try {
+      distribution.toInternalRepr(value)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  let numeric
+  try {
+    numeric = distribution.toInternalRepr(value)
+  } catch {
+    return false
+  }
+  if (!Number.isFinite(numeric)) {
+    return false
+  }
+
+  const boundsTol = 1e-12
+  if (distribution instanceof FloatDistribution) {
+    if (numeric < distribution.low - boundsTol || numeric > distribution.high + boundsTol) {
+      return false
+    }
+    if (distribution.step === null) {
+      return true
+    }
+    const steps = (numeric - distribution.low) / distribution.step
+    return Math.abs(steps - Math.round(steps)) <= 1e-10
+  }
+
+  if (distribution instanceof IntDistribution) {
+    if (numeric < distribution.low - boundsTol || numeric > distribution.high + boundsTol) {
+      return false
+    }
+    if (Math.abs(numeric - Math.round(numeric)) > 1e-10) {
+      return false
+    }
+    const steps = (Math.round(numeric) - distribution.low) / distribution.step
+    return Math.abs(steps - Math.round(steps)) <= 1e-10
+  }
+
+  return false
 }
 
 function compareRowsLex(a, b) {
@@ -3100,8 +3155,21 @@ class TrialRuntime {
       return this.frozen.params[name]
     }
 
-    this.ensureRelativePrepared()
     this.frozen.distributions[name] = distribution
+
+    const fixedParams = this.frozen.system_attrs[FIXED_PARAMS_KEY]
+    if (isPlainObject(fixedParams) && hasOwn(fixedParams, name)) {
+      const fixedValue = fixedParams[name]
+      if (!distributionContainsValue(distribution, fixedValue)) {
+        console.warn(
+          `Fixed parameter "${name}" with value ${String(fixedValue)} is out of range for the current distribution.`
+        )
+      }
+      this.frozen.params[name] = fixedValue
+      return fixedValue
+    }
+
+    this.ensureRelativePrepared()
 
     let value
     if (name in this.relativeSearchSpace && name in this.relativeParams) {
@@ -3146,20 +3214,64 @@ export class Study {
     return this.directions.length > 1
   }
 
-  ask() {
+  enqueueTrial(params) {
+    if (!isPlainObject(params)) {
+      throw new Error('enqueueTrial expects params to be an object.')
+    }
+
     const number = this.trials.length
     const frozen = {
       number,
-      state: TrialState.RUNNING,
+      state: TrialState.WAITING,
       params: {},
       distributions: {},
-      system_attrs: {},
+      system_attrs: {
+        [FIXED_PARAMS_KEY]: cloneJsonValue(params)
+      },
       intermediate_values: {},
       value: null,
       values: null
     }
 
     this.trials.push(frozen)
+  }
+
+  enqueue_trial(params) {
+    this.enqueueTrial(params)
+  }
+
+  ask() {
+    let frozen = null
+    for (let i = 0; i < this.trials.length; i += 1) {
+      if (this.trials[i].state === TrialState.WAITING) {
+        frozen = this.trials[i]
+        break
+      }
+    }
+
+    if (frozen === null) {
+      const number = this.trials.length
+      frozen = {
+        number,
+        state: TrialState.RUNNING,
+        params: {},
+        distributions: {},
+        system_attrs: {},
+        intermediate_values: {},
+        value: null,
+        values: null
+      }
+      this.trials.push(frozen)
+    } else {
+      frozen.state = TrialState.RUNNING
+      frozen.params = frozen.params || {}
+      frozen.distributions = frozen.distributions || {}
+      frozen.system_attrs = frozen.system_attrs || {}
+      frozen.intermediate_values = frozen.intermediate_values || {}
+      frozen.value = frozen.value ?? null
+      frozen.values = frozen.values ?? null
+    }
+
     this.sampler.beforeTrial(this, frozen)
     return new TrialRuntime(this, frozen)
   }

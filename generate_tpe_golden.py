@@ -96,6 +96,32 @@ def suggest_core(trial: optuna.trial.Trial) -> Dict[str, Any]:
     return params
 
 
+def enqueued_core_params() -> List[Dict[str, Any]]:
+    return [
+        {
+            "x": -4.25,
+            "y": 1,
+            "mode": "c",
+            "log_u": 0.0015,
+            "log_i": 2,
+        },
+        {
+            "x": 4.9,
+            "y": 9,
+            "mode": "a",
+            "log_u": 12.5,
+            "log_i": 16,
+        },
+        {
+            "x": 0.0,
+            "y": 5,
+            "mode": "b",
+            "log_u": 0.1,
+            "log_i": 4,
+        },
+    ]
+
+
 def suggest_numeric(trial: optuna.trial.Trial) -> Dict[str, Any]:
     params: Dict[str, Any] = {}
     params["x"] = trial.suggest_float("x", -5.0, 5.0)
@@ -182,6 +208,39 @@ def run_single_objective(seed: int, n_trials: int) -> List[TrialRecord]:
     )
     study = optuna.create_study(sampler=sampler, direction="minimize")
     records: List[TrialRecord] = []
+
+    for _ in range(n_trials):
+        trial = study.ask()
+        params = suggest_core(trial)
+        value = objective_single(params)
+        study.tell(trial, value)
+
+        records.append(
+            TrialRecord(
+                number=trial.number,
+                params=sanitize_params(params),
+                state="complete",
+                value=float(value),
+                values=None,
+                intermediate_values=[],
+                constraint=None,
+            )
+        )
+
+    return records
+
+
+def run_single_objective_enqueued_trials(seed: int, n_trials: int) -> List[TrialRecord]:
+    sampler = TPESampler(
+        seed=seed,
+        n_startup_trials=10,
+        n_ei_candidates=24,
+    )
+    study = optuna.create_study(sampler=sampler, direction="minimize")
+    records: List[TrialRecord] = []
+
+    for params in enqueued_core_params():
+        study.enqueue_trial(params)
 
     for _ in range(n_trials):
         trial = study.ask()
@@ -355,6 +414,36 @@ def run_single_objective_group(seed: int, n_trials: int) -> List[TrialRecord]:
     return records
 
 
+def run_single_objective_dynamic_independent(seed: int, n_trials: int) -> List[TrialRecord]:
+    sampler = TPESampler(
+        seed=seed,
+        n_startup_trials=30,
+        n_ei_candidates=24,
+    )
+    study = optuna.create_study(sampler=sampler, direction="minimize")
+    records: List[TrialRecord] = []
+
+    for _ in range(n_trials):
+        trial = study.ask()
+        params = suggest_group(trial)
+        value = objective_single_group(params)
+        study.tell(trial, value)
+
+        records.append(
+            TrialRecord(
+                number=trial.number,
+                params=sanitize_params(params),
+                state="complete",
+                value=float(value),
+                values=None,
+                intermediate_values=[],
+                constraint=None,
+            )
+        )
+
+    return records
+
+
 def run_multi_objective(seed: int, n_trials: int) -> List[TrialRecord]:
     sampler = TPESampler(
         seed=seed,
@@ -362,6 +451,36 @@ def run_multi_objective(seed: int, n_trials: int) -> List[TrialRecord]:
         n_ei_candidates=24,
         multivariate=True,
         group=True,
+    )
+    study = optuna.create_study(sampler=sampler, directions=["minimize", "minimize"])
+    records: List[TrialRecord] = []
+
+    for _ in range(n_trials):
+        trial = study.ask()
+        params = suggest_group(trial)
+        values = objective_multi(params)
+        study.tell(trial, values=values)
+
+        records.append(
+            TrialRecord(
+                number=trial.number,
+                params=sanitize_params(params),
+                state="complete",
+                value=None,
+                values=[float(values[0]), float(values[1])],
+                intermediate_values=[],
+                constraint=None,
+            )
+        )
+
+    return records
+
+
+def run_multi_objective_dynamic_independent(seed: int, n_trials: int) -> List[TrialRecord]:
+    sampler = TPESampler(
+        seed=seed,
+        n_startup_trials=30,
+        n_ei_candidates=24,
     )
     study = optuna.create_study(sampler=sampler, directions=["minimize", "minimize"])
     records: List[TrialRecord] = []
@@ -514,6 +633,7 @@ def main() -> None:
     seeds = [0, 1, 2, 3, 4]
     n_trials = 200
     extended_n_trials = 120
+    enqueued_n_trials = 8
 
     scenarios.append(
         {
@@ -524,6 +644,24 @@ def main() -> None:
                 {
                     "seed": seed,
                     "trials": [record.__dict__ for record in run_single_objective(seed, n_trials)],
+                }
+                for seed in seeds
+            ],
+        }
+    )
+
+    scenarios.append(
+        {
+            "name": "single_objective_enqueued_trials",
+            "tellLag": 0,
+            "objectiveDirections": ["minimize"],
+            "runs": [
+                {
+                    "seed": seed,
+                    "trials": [
+                        record.__dict__
+                        for record in run_single_objective_enqueued_trials(seed, enqueued_n_trials)
+                    ],
                 }
                 for seed in seeds
             ],
@@ -698,6 +836,24 @@ def main() -> None:
 
     scenarios.append(
         {
+            "name": "single_objective_dynamic_independent",
+            "tellLag": 0,
+            "objectiveDirections": ["minimize"],
+            "runs": [
+                {
+                    "seed": seed,
+                    "trials": [
+                        record.__dict__
+                        for record in run_single_objective_dynamic_independent(seed, extended_n_trials)
+                    ],
+                }
+                for seed in seeds
+            ],
+        }
+    )
+
+    scenarios.append(
+        {
             "name": "multi_objective_group",
             "tellLag": 0,
             "objectiveDirections": ["minimize", "minimize"],
@@ -705,6 +861,24 @@ def main() -> None:
                 {
                     "seed": seed,
                     "trials": [record.__dict__ for record in run_multi_objective(seed, n_trials)],
+                }
+                for seed in seeds
+            ],
+        }
+    )
+
+    scenarios.append(
+        {
+            "name": "multi_objective_dynamic_independent",
+            "tellLag": 0,
+            "objectiveDirections": ["minimize", "minimize"],
+            "runs": [
+                {
+                    "seed": seed,
+                    "trials": [
+                        record.__dict__
+                        for record in run_multi_objective_dynamic_independent(seed, n_trials)
+                    ],
                 }
                 for seed in seeds
             ],

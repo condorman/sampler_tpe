@@ -60,6 +60,32 @@ function suggestCore(trial) {
   return params
 }
 
+function enqueuedCoreParams() {
+  return [
+    {
+      x: -4.25,
+      y: 1,
+      mode: 'c',
+      log_u: 0.0015,
+      log_i: 2
+    },
+    {
+      x: 4.9,
+      y: 9,
+      mode: 'a',
+      log_u: 12.5,
+      log_i: 16
+    },
+    {
+      x: 0.0,
+      y: 5,
+      mode: 'b',
+      log_u: 0.1,
+      log_i: 4
+    }
+  ]
+}
+
 function suggestNumeric(trial) {
   const params = {}
   params.x = trial.suggestFloat('x', -5.0, 5.0)
@@ -180,6 +206,41 @@ function runSingleObjective(seed, nTrials) {
   })
   const study = new Study({ sampler, directions: ['minimize'] })
   const records = []
+
+  for (let i = 0; i < nTrials; i += 1) {
+    const trial = study.ask()
+    const params = suggestCore(trial)
+    const value = objectiveSingle(params)
+    study.tell(trial, { value })
+
+    records.push(
+      makeRecord({
+        number: trial.number,
+        params,
+        state: 'complete',
+        value,
+        values: null,
+        intermediateValues: [],
+        constraint: null
+      })
+    )
+  }
+
+  return records
+}
+
+function runSingleObjectiveEnqueuedTrials(seed, nTrials) {
+  const sampler = createTPESampler({
+    seed,
+    nStartupTrials: 10,
+    nEiCandidates: 24
+  })
+  const study = new Study({ sampler, directions: ['minimize'] })
+  const records = []
+
+  for (const params of enqueuedCoreParams()) {
+    study.enqueueTrial(params)
+  }
 
   for (let i = 0; i < nTrials; i += 1) {
     const trial = study.ask()
@@ -334,6 +395,37 @@ function runSingleObjectiveGroup(seed, nTrials) {
   return records
 }
 
+function runSingleObjectiveDynamicIndependent(seed, nTrials) {
+  const sampler = createTPESampler({
+    seed,
+    nStartupTrials: 30,
+    nEiCandidates: 24
+  })
+  const study = new Study({ sampler, directions: ['minimize'] })
+  const records = []
+
+  for (let i = 0; i < nTrials; i += 1) {
+    const trial = study.ask()
+    const params = suggestGroup(trial)
+    const value = objectiveSingleGroup(params)
+    study.tell(trial, { value })
+
+    records.push(
+      makeRecord({
+        number: trial.number,
+        params,
+        state: 'complete',
+        value,
+        values: null,
+        intermediateValues: [],
+        constraint: null
+      })
+    )
+  }
+
+  return records
+}
+
 function runMultiObjective(seed, nTrials) {
   const sampler = createTPESampler({
     seed,
@@ -341,6 +433,37 @@ function runMultiObjective(seed, nTrials) {
     nEiCandidates: 24,
     multivariate: true,
     group: true
+  })
+  const study = new Study({ sampler, directions: ['minimize', 'minimize'] })
+  const records = []
+
+  for (let i = 0; i < nTrials; i += 1) {
+    const trial = study.ask()
+    const params = suggestGroup(trial)
+    const values = objectiveMulti(params)
+    study.tell(trial, { values })
+
+    records.push(
+      makeRecord({
+        number: trial.number,
+        params,
+        state: 'complete',
+        value: null,
+        values: [values[0], values[1]],
+        intermediateValues: [],
+        constraint: null
+      })
+    )
+  }
+
+  return records
+}
+
+function runMultiObjectiveDynamicIndependent(seed, nTrials) {
+  const sampler = createTPESampler({
+    seed,
+    nStartupTrials: 30,
+    nEiCandidates: 24
   })
   const study = new Study({ sampler, directions: ['minimize', 'minimize'] })
   const records = []
@@ -501,6 +624,9 @@ export async function runGoldenScenario({ name, seed, nTrials, tellLag }) {
   if (name === 'core_single_objective') {
     return runSingleObjective(seed, nTrials)
   }
+  if (name === 'single_objective_enqueued_trials') {
+    return runSingleObjectiveEnqueuedTrials(seed, nTrials)
+  }
   if (name === 'single_objective_maximize_numeric') {
     return runSingleObjectiveMaximizeNumeric(seed, nTrials)
   }
@@ -528,8 +654,14 @@ export async function runGoldenScenario({ name, seed, nTrials, tellLag }) {
   if (name === 'single_objective_group') {
     return runSingleObjectiveGroup(seed, nTrials)
   }
+  if (name === 'single_objective_dynamic_independent') {
+    return runSingleObjectiveDynamicIndependent(seed, nTrials)
+  }
   if (name === 'multi_objective_group') {
     return runMultiObjective(seed, nTrials)
+  }
+  if (name === 'multi_objective_dynamic_independent') {
+    return runMultiObjectiveDynamicIndependent(seed, nTrials)
   }
   if (name === 'multi_objective_mixed_directions') {
     return runMultiObjectiveMixedDirections(seed, nTrials)
