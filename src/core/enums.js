@@ -1,3 +1,12 @@
-import { StudyDirection, TrialState } from '../internal/impl.js'
+export const TrialState = {
+  RUNNING: 'running',
+  COMPLETE: 'complete',
+  PRUNED: 'pruned',
+  FAIL: 'fail',
+  WAITING: 'waiting'
+}
 
-export { TrialState, StudyDirection }
+export const StudyDirection = {
+  MINIMIZE: 'minimize',
+  MAXIMIZE: 'maximize'
+}

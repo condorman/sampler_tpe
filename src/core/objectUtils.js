@@ -1,6 +1,17 @@
-import { internals } from '../internal/impl.js'
+export function isPlainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
 
-export const isPlainObject = internals.isPlainObject
-export const shallowCopy = internals.shallowCopy
-export const sortObjectEntries = internals.sortObjectEntries
-export const hasOwn = internals.hasOwn
+export function shallowCopy(obj) {
+  return Object.assign({}, obj)
+}
+
+export function sortObjectEntries(obj) {
+  return Object.keys(obj)
+    .sort()
+    .map((key) => [key, obj[key]])
+}
+
+export function hasOwn(obj, key) {
+  return Object.prototype.hasOwnProperty.call(obj, key)
+}
