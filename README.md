@@ -1,8 +1,6 @@
-### Environment Setup MAC
+### Environment Setup
 
 ```bash
-brew install python@3.13 python-tk@3.13
-
 python3.13 -m venv env_3.13
 source env_3.13/bin/activate
 pip install -U pip
@@ -43,4 +41,31 @@ const restored = Study.deserialize(snapshot, {
     categoricalDistanceFunc: { myParam: myDistanceFn }
   }
 })
+```
+
+### Golden Output Tests
+
+The golden tests compare trial-by-trial output against the fixture in
+`fixtures/golden-tpe/tpe_golden.json`.
+
+#### 1) Regenerate fixture (Python / Optuna reference)
+
+```bash
+./env_3.13/bin/python generate_tpe_golden.py
+```
+
+#### 2) Run golden test (Vitest)
+
+```bash
+npx vitest run tpeCore.golden.test.js
+```
+
+`tpeCore.golden.runner.js` is the fixed bridge used by the golden test, and it
+uses the exported API from `src/tpe/optuna_tpe.js`.
+
+#### 3) Quick smoke flow
+
+```bash
+./env_3.13/bin/python generate_tpe_golden.py
+npx vitest run tpeCore.golden.test.js
 ```

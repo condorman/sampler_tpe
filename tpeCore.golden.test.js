@@ -1,35 +1,16 @@
 import { describe, it, expect } from 'vitest'
 import fs from 'fs'
 import path from 'path'
-import { fileURLToPath, pathToFileURL } from 'url'
+import { fileURLToPath } from 'url'
+import { runGoldenScenario } from './tpeCore.golden.runner.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const FIXTURE_PATH = path.join(__dirname, 'fixtures', 'golden-tpe', 'tpe_golden.json')
-const DEFAULT_ADAPTER_PATH = path.join(__dirname, 'tpeCore.golden.adapter.js')
-const ADAPTER_PATH = process.env.TPE_GOLDEN_ADAPTER
-  ? path.resolve(process.cwd(), process.env.TPE_GOLDEN_ADAPTER)
-  : DEFAULT_ADAPTER_PATH
 const ABS_EPSILON = 1e-12
 const REL_EPSILON = 1e-9
 
 const fixture = JSON.parse(fs.readFileSync(FIXTURE_PATH, 'utf8'))
-
-let runGoldenScenario = null
-let adapterLoadError = null
-
-try {
-  const adapterModule = await import(pathToFileURL(ADAPTER_PATH).href)
-  if (typeof adapterModule.runGoldenScenario !== 'function') {
-    throw new Error(
-      `Missing export "runGoldenScenario" in ${ADAPTER_PATH}. ` +
-        'Expected signature: async ({ name, seed, nTrials, tellLag, objectiveDirections }) => TrialRecord[]'
-    )
-  }
-  runGoldenScenario = adapterModule.runGoldenScenario
-} catch (error) {
-  adapterLoadError = error
-}
 
 function normalizeTrial(trial) {
   return {
@@ -96,20 +77,12 @@ describe('tpe golden fixture', () => {
   })
 })
 
-describe('tpe golden adapter', () => {
-  it('is loadable', () => {
-    if (adapterLoadError) {
-      throw new Error(
-        `Unable to load adapter from ${ADAPTER_PATH}: ${adapterLoadError.message}`
-      )
-    }
+describe('tpe golden runner', () => {
+  it('exports runGoldenScenario', () => {
     expect(typeof runGoldenScenario).toBe('function')
   })
 })
-
-const parityDescribe = adapterLoadError ? describe.skip : describe
-
-parityDescribe('TPE parity against Optuna golden fixture', () => {
+describe('TPE parity against Optuna golden fixture', () => {
   for (const scenario of fixture.scenarios) {
     describe(`scenario: ${scenario.name}`, () => {
       for (const run of scenario.runs) {
