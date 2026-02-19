@@ -1,0 +1,16 @@
+import { internals } from '../internal/impl.js'
+
+export const serializeDistributionForSnapshot = internals.serializeDistributionForSnapshot
+export const deserializeDistributionFromSnapshot = internals.deserializeDistributionFromSnapshot
+export const serializeRngStateForSnapshot = internals.serializeRngStateForSnapshot
+export const restoreRngStateFromSnapshot = internals.restoreRngStateFromSnapshot
+export const serializeFunctionSpec = internals.serializeFunctionSpec
+export const resolveFunctionSpec = internals.resolveFunctionSpec
+export const serializeOptionalFunctionSpec = internals.serializeOptionalFunctionSpec
+export const resolveOptionalFunctionSpec = internals.resolveOptionalFunctionSpec
+export const serializeCategoricalDistanceSpec = internals.serializeCategoricalDistanceSpec
+export const resolveCategoricalDistanceSpec = internals.resolveCategoricalDistanceSpec
+export const serializeSamplerForSnapshot = internals.serializeSamplerForSnapshot
+export const deserializeSamplerFromSnapshot = internals.deserializeSamplerFromSnapshot
+export const serializeTrialForSnapshot = internals.serializeTrialForSnapshot
+export const deserializeTrialFromSnapshot = internals.deserializeTrialFromSnapshot
